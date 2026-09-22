@@ -1,0 +1,24 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: antunes-mongo
+    restart: unless-stopped
+    ports:
+      # 27018 côté hôte pour éviter tout conflit avec un MongoDB déjà
+      # installé localement sur la machine (ex: brew services). Le port
+      # interne au conteneur reste 27017.
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-antunes}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-antunes_dev_password}
+      MONGO_INITDB_DATABASE: antunes
+    volumes:
+      - antunes-mongo-data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/antunes --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  antunes-mongo-data:
