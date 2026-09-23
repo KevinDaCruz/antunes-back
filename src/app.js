@@ -8,6 +8,7 @@ import hpp from "hpp";
 import { rateLimit } from "express-rate-limit";
 import apiRoutes from "./routes/index.js";
 import { notFound, errorHandler } from "./middlewares/errorHandler.js";
+import { handleStripeWebhook } from "./controllers/paymentController.js";
 
 export function createApp() {
   const app = express();
@@ -20,6 +21,16 @@ export function createApp() {
     }),
   );
   app.use(compression());
+
+  // Le webhook Stripe doit être monté AVANT express.json() : Stripe vérifie
+  // la signature sur le corps brut de la requête, que express.json() aurait
+  // déjà parsé/altéré si on le laissait passer par le parseur global.
+  app.post(
+    "/api/payments/webhook",
+    express.raw({ type: "application/json" }),
+    handleStripeWebhook,
+  );
+
   app.use(express.json({ limit: "10kb" }));
   app.use(mongoSanitize());
   app.use(hpp());
