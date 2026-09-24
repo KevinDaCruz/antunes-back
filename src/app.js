@@ -13,6 +13,13 @@ import { handleStripeWebhook } from "./controllers/paymentController.js";
 export function createApp() {
   const app = express();
 
+  // Render (comme Heroku, Railway...) place l'app derrière un unique proxy
+  // inversé qui définit X-Forwarded-For. Sans ce réglage, Express n'y fait
+  // pas confiance et express-rate-limit ne peut pas identifier les clients
+  // correctement (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR). "1" indique de ne
+  // faire confiance qu'à ce premier saut, pas à toute la chaîne.
+  app.set("trust proxy", 1);
+
   app.disable("x-powered-by");
   app.use(helmet());
   app.use(

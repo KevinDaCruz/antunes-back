@@ -24,6 +24,18 @@ describe("rate limiting (outside the test environment)", () => {
   });
 });
 
+describe("trust proxy", () => {
+  it("trusts exactly one hop, so req.ip reflects Render's X-Forwarded-For correctly", async () => {
+    const app = createApp();
+
+    // Render place l'app derrière un unique proxy inversé. Sans ce réglage,
+    // express-rate-limit ne peut pas identifier les clients de façon fiable
+    // (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) et la limite anti brute-force sur
+    // /api/auth devient inefficace en production.
+    expect(app.get("trust proxy")).toBe(1);
+  });
+});
+
 describe("GET /api/health", () => {
   it("responds with ok", async () => {
     const app = createApp();
