@@ -23,3 +23,22 @@ export const updateMe = asyncHandler(async function updateMe(req, res) {
 
   res.json({ user: serializeUser(updatedUser) });
 });
+
+export const changePassword = asyncHandler(async function changePassword(
+  req,
+  res,
+) {
+  const { currentPassword, newPassword } = req.body;
+
+  const user = await User.findById(req.user._id).select("+passwordHash");
+  const isCurrentPasswordValid = await user.comparePassword(currentPassword);
+
+  if (!isCurrentPasswordValid) {
+    throw new AppError("Mot de passe actuel incorrect.", 401);
+  }
+
+  user.passwordHash = await User.hashPassword(newPassword);
+  await user.save();
+
+  res.json({ success: true });
+});

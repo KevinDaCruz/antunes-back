@@ -102,3 +102,15 @@ export const getOrderBySessionId = asyncHandler(
     res.json({ order });
   },
 );
+
+export const listMyOrders = asyncHandler(async function listMyOrders(
+  req,
+  res,
+) {
+  const orders = await Order.find({ buyer: req.user._id })
+    .sort({ createdAt: -1 })
+    .populate("product", "name imageUrl price")
+    .populate("seller", "pseudo");
+
+  res.json({ orders });
+});

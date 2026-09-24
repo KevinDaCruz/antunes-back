@@ -17,3 +17,14 @@ export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Adresse e-mail invalide."),
   password: z.string().min(1, "Le mot de passe est requis."),
 });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Adresse e-mail invalide."),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Token manquant."),
+  password: z
+    .string()
+    .min(8, "Le mot de passe doit contenir au moins 8 caractères."),
+});

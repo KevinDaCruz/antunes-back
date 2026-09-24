@@ -83,3 +83,59 @@ describe("PATCH /api/users/me", () => {
     expect(response.status).toBe(409);
   });
 });
+
+describe("PATCH /api/users/me/password", () => {
+  async function signup() {
+    const response = await request(app).post("/api/auth/signup").send({
+      firstName: "Kevin",
+      lastName: "Da Cruz",
+      pseudo: "kevintech",
+      email: "kevin@example.com",
+      password: "azerty123",
+    });
+
+    return response.body;
+  }
+
+  it("rejects unauthenticated access", async () => {
+    const response = await request(app)
+      .patch("/api/users/me/password")
+      .send({ currentPassword: "azerty123", newPassword: "newpassword456" });
+
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects an incorrect current password", async () => {
+    const { token } = await signup();
+
+    const response = await request(app)
+      .patch("/api/users/me/password")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ currentPassword: "wrong-password", newPassword: "newpassword456" });
+
+    expect(response.status).toBe(401);
+  });
+
+  it("changes the password and allows logging in with the new one", async () => {
+    const { token } = await signup();
+
+    const changeResponse = await request(app)
+      .patch("/api/users/me/password")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ currentPassword: "azerty123", newPassword: "newpassword456" });
+
+    expect(changeResponse.status).toBe(200);
+
+    const oldPasswordLogin = await request(app).post("/api/auth/login").send({
+      email: "kevin@example.com",
+      password: "azerty123",
+    });
+    const newPasswordLogin = await request(app).post("/api/auth/login").send({
+      email: "kevin@example.com",
+      password: "newpassword456",
+    });
+
+    expect(oldPasswordLogin.status).toBe(401);
+    expect(newPasswordLogin.status).toBe(200);
+  });
+});

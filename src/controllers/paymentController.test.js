@@ -135,6 +135,63 @@ describe("POST /api/payments/checkout-session", () => {
   });
 });
 
+describe("GET /api/payments/orders", () => {
+  it("rejects unauthenticated access", async () => {
+    const response = await request(app).get("/api/payments/orders");
+
+    expect(response.status).toBe(401);
+  });
+
+  it("only lists the current user's orders, most recent first", async () => {
+    const fakeStripe = {
+      checkout: {
+        sessions: {
+          create: vi
+            .fn()
+            .mockResolvedValueOnce({ id: "cs_1", url: "https://x/cs_1" })
+            .mockResolvedValueOnce({ id: "cs_2", url: "https://x/cs_2" }),
+        },
+      },
+    };
+    getStripeClient.mockReturnValue(fakeStripe);
+
+    const seller = await createUser({
+      pseudo: "seller",
+      email: "seller@example.com",
+    });
+    const buyer = await createUser({
+      pseudo: "buyer",
+      email: "buyer@example.com",
+    });
+    const stranger = await createUser({
+      pseudo: "stranger",
+      email: "stranger@example.com",
+    });
+    const productA = await createProduct(seller.token);
+    const productB = await createProduct(seller.token);
+
+    await request(app)
+      .post("/api/payments/checkout-session")
+      .set("Authorization", `Bearer ${buyer.token}`)
+      .send({ productId: productA._id });
+    await request(app)
+      .post("/api/payments/checkout-session")
+      .set("Authorization", `Bearer ${buyer.token}`)
+      .send({ productId: productB._id });
+
+    const buyerOrders = await request(app)
+      .get("/api/payments/orders")
+      .set("Authorization", `Bearer ${buyer.token}`);
+    const strangerOrders = await request(app)
+      .get("/api/payments/orders")
+      .set("Authorization", `Bearer ${stranger.token}`);
+
+    expect(buyerOrders.body.orders).toHaveLength(2);
+    expect(buyerOrders.body.orders[0].seller.pseudo).toBe("seller");
+    expect(strangerOrders.body.orders).toHaveLength(0);
+  });
+});
+
 describe("POST /api/payments/webhook", () => {
   it("marks the matching order as paid when checkout.session.completed fires", async () => {
     const seller = await createUser({

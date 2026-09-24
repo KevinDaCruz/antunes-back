@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createCheckoutSession,
   getOrderBySessionId,
+  listMyOrders,
 } from "../controllers/paymentController.js";
 import { validateBody } from "../middlewares/validate.js";
 import { createCheckoutSessionSchema } from "../validators/paymentValidators.js";
@@ -15,6 +16,7 @@ router.post(
   validateBody(createCheckoutSessionSchema),
   createCheckoutSession,
 );
+router.get("/orders", listMyOrders);
 router.get("/orders/:sessionId", getOrderBySessionId);
 
 export default router;
