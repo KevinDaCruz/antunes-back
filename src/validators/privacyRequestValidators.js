@@ -5,9 +5,7 @@ const requestTypes = Object.keys(PRIVACY_REQUEST_TYPES);
 
 export const createPrivacyRequestSchema = z.object({
   email: z.string().trim().toLowerCase().email("Adresse e-mail invalide."),
-  type: z.enum(requestTypes, {
-    errorMap: () => ({ message: "Type de demande invalide." }),
-  }),
+  type: z.enum(requestTypes, { error: "Type de demande invalide." }),
   message: z
     .string()
     .trim()
