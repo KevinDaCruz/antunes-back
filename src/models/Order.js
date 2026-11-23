@@ -17,6 +17,9 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    // Montants en euros. amountTotal = prix de l'article + serviceFee,
+    // c'est-à-dire ce que l'acheteur a réellement payé.
+    serviceFee: { type: Number, default: 0 },
     amountTotal: { type: Number, required: true },
     currency: { type: String, default: "eur" },
     stripeSessionId: { type: String, required: true, unique: true },

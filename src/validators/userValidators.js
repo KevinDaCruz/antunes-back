@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { passwordSchema } from "./passwordPolicy.js";
 
 export const updateMeSchema = z.object({
   firstName: z.string().trim().min(1, "Le prénom est requis.").optional(),
@@ -19,7 +20,9 @@ export const updateMeSchema = z.object({
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Le mot de passe actuel est requis."),
-  newPassword: z
-    .string()
-    .min(8, "Le nouveau mot de passe doit contenir au moins 8 caractères."),
+  newPassword: passwordSchema,
+});
+
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1, "Le mot de passe est requis."),
 });

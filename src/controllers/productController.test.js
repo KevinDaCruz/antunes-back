@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
+import { confirmEmail } from "../test/helpers.js";
+import { Product } from "../models/Product.js";
 
 const app = createApp();
 
@@ -10,8 +12,10 @@ async function createAuthenticatedUser() {
     lastName: "Da Cruz",
     pseudo: "kevintech",
     email: "kevin@example.com",
-    password: "azerty123",
+    password: "Azerty-2026!x",
   });
+
+  await confirmEmail(response.body.user.email);
 
   return response.body.token;
 }
@@ -55,6 +59,36 @@ describe("POST /api/products", () => {
     const response = await createProduct(token);
 
     expect(response.body.product.seller.pseudo).toBe("kevintech");
+  });
+
+  it("refuses to publish while the email address is not confirmed", async () => {
+    const response = await request(app).post("/api/auth/signup").send({
+      firstName: "Nina",
+      lastName: "Martin",
+      pseudo: "ninam",
+      email: "nina@example.com",
+      password: "Azerty-2026!x",
+    });
+
+    const publishResponse = await createProduct(response.body.token);
+
+    expect(publishResponse.status).toBe(403);
+  });
+
+  it("exposes the buyer service fee (5 % + 0,70 €) on the product", async () => {
+    const token = await createAuthenticatedUser();
+
+    const response = await createProduct(token, { price: 100 });
+
+    expect(response.body.product.serviceFee).toBe(5.7);
+  });
+
+  it("ignores a status sent by the client", async () => {
+    const token = await createAuthenticatedUser();
+
+    const response = await createProduct(token, { status: "sold" });
+
+    expect(response.body.product.status).toBe("available");
   });
 
   it("rejects an invalid condition", async () => {
@@ -139,5 +173,58 @@ describe("GET /api/products/:id", () => {
     const response = await request(app).get("/api/products/not-an-id");
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("Sold products", () => {
+  it("are hidden from the catalog but still reachable by their id", async () => {
+    const token = await createAuthenticatedUser();
+    const soldResponse = await createProduct(token, { name: "PS5 Slim" });
+    await createProduct(token, { name: "Raspberry Pi 4" });
+    await Product.findByIdAndUpdate(soldResponse.body.product._id, {
+      status: "sold",
+    });
+
+    const catalogResponse = await request(app).get("/api/products");
+    const detailResponse = await request(app).get(
+      `/api/products/${soldResponse.body.product._id}`,
+    );
+
+    expect(catalogResponse.body.products).toHaveLength(1);
+    expect(catalogResponse.body.products[0].name).toBe("Raspberry Pi 4");
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.product.status).toBe("sold");
+  });
+});
+
+describe("GET /api/products/mine", () => {
+  it("rejects unauthenticated access", async () => {
+    const response = await request(app).get("/api/products/mine");
+
+    expect(response.status).toBe(401);
+  });
+
+  it("lists only the current user's products, including sold ones", async () => {
+    const token = await createAuthenticatedUser();
+    const mine = await createProduct(token);
+    await Product.findByIdAndUpdate(mine.body.product._id, { status: "sold" });
+
+    const otherSignup = await request(app).post("/api/auth/signup").send({
+      firstName: "Nina",
+      lastName: "Martin",
+      pseudo: "ninam",
+      email: "nina@example.com",
+      password: "Azerty-2026!x",
+    });
+    await confirmEmail("nina@example.com");
+    await createProduct(otherSignup.body.token);
+
+    const response = await request(app)
+      .get("/api/products/mine")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.products).toHaveLength(1);
+    expect(response.body.products[0].status).toBe("sold");
   });
 });

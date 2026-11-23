@@ -8,6 +8,8 @@ vi.mock("../config/stripe.js", () => ({
 const { getStripeClient } = await import("../config/stripe.js");
 const { createApp } = await import("../app.js");
 const { Order } = await import("../models/Order.js");
+const { Product } = await import("../models/Product.js");
+const { confirmEmail } = await import("../test/helpers.js");
 
 const app = createApp();
 
@@ -19,9 +21,11 @@ async function createUser(overrides = {}) {
       lastName: "Da Cruz",
       pseudo: "kevintech",
       email: "kevin@example.com",
-      password: "azerty123",
+      password: "Azerty-2026!x",
       ...overrides,
     });
+
+  await confirmEmail(response.body.user.email);
 
   return response.body;
 }
@@ -88,7 +92,9 @@ describe("POST /api/payments/checkout-session", () => {
 
     const order = await Order.findOne({ stripeSessionId: "cs_test_123" });
     expect(order.status).toBe("pending");
-    expect(order.amountTotal).toBe(950);
+    // 950 € + frais de service (5 % + 0,70 € = 48,20 €).
+    expect(order.serviceFee).toBe(48.2);
+    expect(order.amountTotal).toBe(998.2);
   });
 
   it("sends the price to Stripe in cents", async () => {
@@ -121,6 +127,27 @@ describe("POST /api/payments/checkout-session", () => {
       .send({ productId: product._id });
 
     expect(response.status).toBe(400);
+  });
+
+  it("rejects a product that has already been sold", async () => {
+    const seller = await createUser({
+      pseudo: "seller",
+      email: "seller@example.com",
+    });
+    const buyer = await createUser({
+      pseudo: "buyer",
+      email: "buyer@example.com",
+    });
+    const product = await createProduct(seller.token);
+    await Product.findByIdAndUpdate(product._id, { status: "sold" });
+
+    const response = await request(app)
+      .post("/api/payments/checkout-session")
+      .set("Authorization", `Bearer ${buyer.token}`)
+      .send({ productId: product._id });
+
+    expect(response.status).toBe(409);
+    expect(fakeStripe.checkout.sessions.create).not.toHaveBeenCalled();
   });
 
   it("returns 404 for an unknown product", async () => {
@@ -231,6 +258,51 @@ describe("POST /api/payments/webhook", () => {
     expect(response.status).toBe(200);
     const order = await Order.findOne({ stripeSessionId: "cs_test_webhook" });
     expect(order.status).toBe("paid");
+
+    const soldProduct = await Product.findById(product._id);
+    expect(soldProduct.status).toBe("sold");
+  });
+
+  it("marks a pending order as failed when the checkout session expires", async () => {
+    const seller = await createUser({
+      pseudo: "seller",
+      email: "seller@example.com",
+    });
+    const buyer = await createUser({
+      pseudo: "buyer",
+      email: "buyer@example.com",
+    });
+    const product = await createProduct(seller.token);
+
+    await Order.create({
+      product: product._id,
+      buyer: buyer.user.id,
+      seller: seller.user.id,
+      amountTotal: 950,
+      stripeSessionId: "cs_test_expired",
+    });
+
+    getStripeClient.mockReturnValue({
+      webhooks: {
+        constructEvent: vi.fn().mockReturnValue({
+          type: "checkout.session.expired",
+          data: { object: { id: "cs_test_expired" } },
+        }),
+      },
+    });
+
+    const response = await request(app)
+      .post("/api/payments/webhook")
+      .set("Content-Type", "application/json")
+      .set("stripe-signature", "test-signature")
+      .send(JSON.stringify({ type: "checkout.session.expired" }));
+
+    expect(response.status).toBe(200);
+    const order = await Order.findOne({ stripeSessionId: "cs_test_expired" });
+    expect(order.status).toBe("failed");
+
+    const stillAvailable = await Product.findById(product._id);
+    expect(stillAvailable.status).toBe("available");
   });
 
   it("rejects a request with an invalid signature", async () => {

@@ -14,7 +14,11 @@ export const listProducts = asyncHandler(async function listProducts(
   res,
 ) {
   const { category, condition, search, sort } = req.query;
-  const filter = {};
+
+  // Le catalogue n'affiche que les annonces encore en vente. "$ne" plutôt
+  // qu'une égalité stricte : les annonces créées avant l'ajout du champ
+  // status n'ont pas de valeur en base et doivent rester visibles.
+  const filter = { status: { $ne: "sold" } };
 
   if (category) {
     filter.category = category;
@@ -33,6 +37,17 @@ export const listProducts = asyncHandler(async function listProducts(
   const products = await Product.find(filter)
     .sort(sortOption)
     .populate("seller", "pseudo createdAt");
+
+  res.json({ products });
+});
+
+export const listMyProducts = asyncHandler(async function listMyProducts(
+  req,
+  res,
+) {
+  const products = await Product.find({ seller: req.user._id }).sort({
+    createdAt: -1,
+  });
 
   res.json({ products });
 });

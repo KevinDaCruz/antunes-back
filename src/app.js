@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
@@ -61,10 +62,25 @@ export function createApp() {
       "/api/auth",
       rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true }),
     );
+
+    // Formulaire public sans authentification : 5 demandes / heure par IP
+    // suffisent largement à un usage légitime et coupent court au spam.
+    app.use(
+      "/api/privacy-requests",
+      rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true }),
+    );
   }
 
+  // Sonde de supervision (UptimeRobot) : renvoie 503 si la connexion à
+  // MongoDB est perdue, pour qu'une base indisponible déclenche une alerte
+  // et pas seulement un serveur arrêté.
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok" });
+    const isDatabaseConnected = mongoose.connection.readyState === 1;
+
+    res.status(isDatabaseConnected ? 200 : 503).json({
+      status: isDatabaseConnected ? "ok" : "degraded",
+      database: isDatabaseConnected ? "connected" : "disconnected",
+    });
   });
 
   app.use("/api", apiRoutes);

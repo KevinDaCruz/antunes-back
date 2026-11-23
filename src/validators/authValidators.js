@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { passwordSchema } from "./passwordPolicy.js";
 
 export const signupSchema = z.object({
   firstName: z.string().trim().min(1, "Le prénom est requis."),
@@ -8,9 +9,7 @@ export const signupSchema = z.object({
     .trim()
     .min(3, "Le pseudo doit contenir au moins 3 caractères."),
   email: z.string().trim().toLowerCase().email("Adresse e-mail invalide."),
-  password: z
-    .string()
-    .min(8, "Le mot de passe doit contenir au moins 8 caractères."),
+  password: passwordSchema,
 });
 
 export const loginSchema = z.object({
@@ -24,7 +23,9 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1, "Token manquant."),
-  password: z
-    .string()
-    .min(8, "Le mot de passe doit contenir au moins 8 caractères."),
+  password: passwordSchema,
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(1, "Token manquant."),
 });

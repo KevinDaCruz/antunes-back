@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import mongoose from "mongoose";
 import request from "supertest";
 import { createApp } from "./app.js";
 
@@ -43,6 +44,19 @@ describe("GET /api/health", () => {
     const response = await request(app).get("/api/health");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ status: "ok" });
+    expect(response.body).toEqual({ status: "ok", database: "connected" });
+  });
+
+  it("responds with 503 when the database connection is lost", async () => {
+    const app = createApp();
+    const readyStateSpy = vi
+      .spyOn(mongoose.connection, "readyState", "get")
+      .mockReturnValue(0);
+
+    const response = await request(app).get("/api/health");
+    readyStateSpy.mockRestore();
+
+    expect(response.status).toBe(503);
+    expect(response.body.database).toBe("disconnected");
   });
 });

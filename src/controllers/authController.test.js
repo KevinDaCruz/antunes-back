@@ -16,7 +16,7 @@ const validSignupPayload = {
   lastName: "Da Cruz",
   pseudo: "kevintech",
   email: "kevin@example.com",
-  password: "azerty123",
+  password: "Azerty-2026!x",
 };
 
 describe("POST /api/auth/signup", () => {
@@ -35,6 +35,20 @@ describe("POST /api/auth/signup", () => {
     const response = await request(app)
       .post("/api/auth/signup")
       .send({ ...validSignupPayload, email: "not-an-email" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it.each([
+    ["too short", "Court-1!"],
+    ["without an uppercase letter", "azerty-2026!x"],
+    ["without a lowercase letter", "AZERTY-2026!X"],
+    ["without a digit", "Azerty-deux!x"],
+    ["without a special character", "Azerty2026xyz"],
+  ])("rejects a password %s (CNIL rule)", async (_label, password) => {
+    const response = await request(app)
+      .post("/api/auth/signup")
+      .send({ ...validSignupPayload, password });
 
     expect(response.status).toBe(400);
   });
@@ -130,7 +144,13 @@ describe("POST /api/auth/forgot-password", () => {
       .send({ email: validSignupPayload.email });
 
     expect(response.status).toBe(200);
-    expect(fakeResend.emails.send).toHaveBeenCalledOnce();
+    // Le premier e-mail est la confirmation d'adresse envoyée à l'inscription.
+    expect(fakeResend.emails.send).toHaveBeenCalledTimes(2);
+    expect(fakeResend.emails.send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        subject: "Réinitialise ton mot de passe Antunes",
+      }),
+    );
 
     const user = await User.findOne({ email: validSignupPayload.email }).select(
       "+resetPasswordTokenHash +resetPasswordExpiresAt",
@@ -184,7 +204,7 @@ describe("POST /api/auth/reset-password", () => {
   it("rejects an invalid token", async () => {
     const response = await request(app)
       .post("/api/auth/reset-password")
-      .send({ token: "not-a-real-token", password: "newpassword456" });
+      .send({ token: "not-a-real-token", password: "NouveauMdp-456!" });
 
     expect(response.status).toBe(400);
   });
@@ -195,13 +215,13 @@ describe("POST /api/auth/reset-password", () => {
 
     const resetResponse = await request(app)
       .post("/api/auth/reset-password")
-      .send({ token: rawToken, password: "newpassword456" });
+      .send({ token: rawToken, password: "NouveauMdp-456!" });
 
     expect(resetResponse.status).toBe(200);
 
     const loginResponse = await request(app).post("/api/auth/login").send({
       email: validSignupPayload.email,
-      password: "newpassword456",
+      password: "NouveauMdp-456!",
     });
 
     expect(loginResponse.status).toBe(200);
@@ -213,12 +233,128 @@ describe("POST /api/auth/reset-password", () => {
 
     await request(app)
       .post("/api/auth/reset-password")
-      .send({ token: rawToken, password: "newpassword456" });
+      .send({ token: rawToken, password: "NouveauMdp-456!" });
 
     const secondAttempt = await request(app)
       .post("/api/auth/reset-password")
-      .send({ token: rawToken, password: "anotherpassword789" });
+      .send({ token: rawToken, password: "AutreMdp-789!xyz" });
 
     expect(secondAttempt.status).toBe(400);
+  });
+});
+
+describe("Email confirmation (double opt-in)", () => {
+  let fakeResend;
+
+  beforeEach(() => {
+    fakeResend = { emails: { send: vi.fn().mockResolvedValue({}) } };
+    getResendClient.mockReturnValue(fakeResend);
+  });
+
+  function extractTokenFromLastEmail() {
+    const { html } = fakeResend.emails.send.mock.calls.at(-1)[0];
+    return html.match(/token=([a-f0-9]+)/)[1];
+  }
+
+  it("sends a confirmation link at signup and starts unconfirmed", async () => {
+    const response = await request(app)
+      .post("/api/auth/signup")
+      .send(validSignupPayload);
+
+    expect(response.body.user.emailVerified).toBe(false);
+    expect(fakeResend.emails.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: validSignupPayload.email,
+        subject: "Confirme ton adresse e-mail Antunes",
+      }),
+    );
+  });
+
+  it("confirms the address with the token received by email", async () => {
+    const signupResponse = await request(app)
+      .post("/api/auth/signup")
+      .send(validSignupPayload);
+    const token = extractTokenFromLastEmail();
+
+    const response = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token });
+
+    expect(response.status).toBe(200);
+
+    const meResponse = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${signupResponse.body.token}`);
+    expect(meResponse.body.user.emailVerified).toBe(true);
+  });
+
+  it("rejects an unknown token", async () => {
+    const response = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: "not-a-real-token" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("does not accept the same token twice", async () => {
+    await request(app).post("/api/auth/signup").send(validSignupPayload);
+    const token = extractTokenFromLastEmail();
+
+    await request(app).post("/api/auth/verify-email").send({ token });
+    const secondAttempt = await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token });
+
+    expect(secondAttempt.status).toBe(400);
+  });
+
+  it("stores only a hash of the token, never the token itself", async () => {
+    await request(app).post("/api/auth/signup").send(validSignupPayload);
+    const token = extractTokenFromLastEmail();
+
+    const user = await User.findOne({ email: validSignupPayload.email }).select(
+      "+emailVerificationTokenHash",
+    );
+
+    expect(user.emailVerificationTokenHash).not.toBe(token);
+    expect(user.emailVerificationTokenHash).toBe(User.hashToken(token));
+  });
+
+  it("can resend a new link to an unconfirmed account", async () => {
+    const signupResponse = await request(app)
+      .post("/api/auth/signup")
+      .send(validSignupPayload);
+
+    const response = await request(app)
+      .post("/api/auth/resend-verification")
+      .set("Authorization", `Bearer ${signupResponse.body.token}`);
+
+    expect(response.status).toBe(200);
+    expect(fakeResend.emails.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses to resend a link once the address is confirmed", async () => {
+    const signupResponse = await request(app)
+      .post("/api/auth/signup")
+      .send(validSignupPayload);
+    await request(app)
+      .post("/api/auth/verify-email")
+      .send({ token: extractTokenFromLastEmail() });
+
+    const response = await request(app)
+      .post("/api/auth/resend-verification")
+      .set("Authorization", `Bearer ${signupResponse.body.token}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it("still creates the account when the email provider is down", async () => {
+    fakeResend.emails.send.mockRejectedValue(new Error("Resend unavailable"));
+
+    const response = await request(app)
+      .post("/api/auth/signup")
+      .send(validSignupPayload);
+
+    expect(response.status).toBe(201);
   });
 });

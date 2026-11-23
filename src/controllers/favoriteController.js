@@ -42,6 +42,11 @@ export const removeFavorite = asyncHandler(async function removeFavorite(
 ) {
   const { productId } = req.params;
 
+  // Sans ce contrôle, Mongoose lève une CastError qui remonte en erreur 500.
+  if (!mongoose.isValidObjectId(productId)) {
+    throw new AppError("Produit introuvable.", 404);
+  }
+
   await User.findByIdAndUpdate(req.user._id, {
     $pull: { favorites: productId },
   });

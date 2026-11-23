@@ -14,5 +14,6 @@ export function serializeUser(user) {
     firstName: user.firstName,
     lastName: user.lastName,
     address: user.address,
+    emailVerified: Boolean(user.emailVerifiedAt),
   };
 }

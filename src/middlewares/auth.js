@@ -32,3 +32,20 @@ export const requireAuth = asyncHandler(async function requireAuth(
   req.user = user;
   next();
 });
+
+// À placer après requireAuth. Réservé aux actions qui engagent le compte
+// vis-à-vis des autres membres (publier une annonce) : on s'assure d'abord
+// que l'adresse e-mail appartient bien à l'utilisateur (double opt-in).
+export function requireVerifiedEmail(req, _res, next) {
+  if (!req.user.emailVerifiedAt) {
+    next(
+      new AppError(
+        "Confirme ton adresse e-mail pour pouvoir effectuer cette action.",
+        403,
+      ),
+    );
+    return;
+  }
+
+  next();
+}

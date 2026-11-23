@@ -55,9 +55,11 @@ async function seed() {
   const demoSeller = await User.create({
     pseudo: "DemoSeller",
     email: "demo-seller@antunes.local",
-    passwordHash: await User.hashPassword("demo-password-123"),
+    passwordHash: await User.hashPassword("Demo-Seller-2026!"),
     firstName: "Demo",
     lastName: "Seller",
+    // Compte de démonstration : adresse fictive, considérée comme confirmée.
+    emailVerifiedAt: new Date(),
   });
 
   await Product.insertMany(

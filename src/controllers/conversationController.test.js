@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
+import { confirmEmail } from "../test/helpers.js";
 
 const app = createApp();
 
@@ -12,9 +13,11 @@ async function createUser(overrides = {}) {
       lastName: "Da Cruz",
       pseudo: "kevintech",
       email: "kevin@example.com",
-      password: "azerty123",
+      password: "Azerty-2026!x",
       ...overrides,
     });
+
+  await confirmEmail(response.body.user.email);
 
   return response.body;
 }

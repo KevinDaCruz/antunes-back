@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../app.js";
+import { confirmEmail } from "../test/helpers.js";
 
 const app = createApp();
 
@@ -12,9 +13,11 @@ async function createUser(overrides = {}) {
       lastName: "Da Cruz",
       pseudo: "kevintech",
       email: "kevin@example.com",
-      password: "azerty123",
+      password: "Azerty-2026!x",
       ...overrides,
     });
+
+  await confirmEmail(response.body.user.email);
 
   return response.body;
 }
@@ -112,6 +115,18 @@ describe("Favorites", () => {
     const response = await request(app)
       .post("/api/favorites/507f1f77bcf86cd799439011")
       .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(404);
+  });
+});
+
+describe("DELETE /api/favorites/:productId", () => {
+  it("returns 404 instead of a server error for a malformed id", async () => {
+    const user = await createUser();
+
+    const response = await request(app)
+      .delete("/api/favorites/not-a-valid-id")
+      .set("Authorization", `Bearer ${user.token}`);
 
     expect(response.status).toBe(404);
   });

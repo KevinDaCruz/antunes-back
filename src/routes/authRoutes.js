@@ -5,6 +5,8 @@ import {
   me,
   forgotPassword,
   resetPassword,
+  verifyEmail,
+  resendVerificationEmail,
 } from "../controllers/authController.js";
 import { validateBody } from "../middlewares/validate.js";
 import {
@@ -12,6 +14,7 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  verifyEmailSchema,
 } from "../validators/authValidators.js";
 import { requireAuth } from "../middlewares/auth.js";
 
@@ -20,6 +23,8 @@ const router = Router();
 router.post("/signup", validateBody(signupSchema), signup);
 router.post("/login", validateBody(loginSchema), login);
 router.get("/me", requireAuth, me);
+router.post("/verify-email", validateBody(verifyEmailSchema), verifyEmail);
+router.post("/resend-verification", requireAuth, resendVerificationEmail);
 router.post(
   "/forgot-password",
   validateBody(forgotPasswordSchema),
