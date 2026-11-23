@@ -3,7 +3,9 @@ services:
     name: antunes-back
     runtime: node
     plan: free
-    buildCommand: npm install
+    # Installe exactement les versions du package-lock.json, sans les
+    # outils de développement (tests, lint) inutiles en production.
+    buildCommand: npm ci --omit=dev
     startCommand: npm start
     envVars:
       - key: NODE_ENV
