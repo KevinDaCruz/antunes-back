@@ -36,7 +36,7 @@ export const listConversations = asyncHandler(async function listConversations(
     participants: req.user._id,
   })
     .populate("participants", "pseudo")
-    .populate("product", "name imageUrl")
+    .populate("product", "name imageUrl category")
     .sort({ updatedAt: -1 });
 
   res.json({ conversations });
@@ -52,7 +52,7 @@ export const getConversation = asyncHandler(async function getConversation(
   );
 
   await conversation.populate("participants", "pseudo");
-  await conversation.populate("product", "name imageUrl");
+  await conversation.populate("product", "name imageUrl category");
 
   res.json({ conversation });
 });
@@ -96,7 +96,7 @@ export const startConversation = asyncHandler(async function startConversation(
   conversation.messages.push({ sender: req.user._id, content });
   await conversation.save();
   await conversation.populate("participants", "pseudo");
-  await conversation.populate("product", "name imageUrl");
+  await conversation.populate("product", "name imageUrl category");
 
   res.status(201).json({ conversation });
 });
@@ -110,7 +110,7 @@ export const sendMessage = asyncHandler(async function sendMessage(req, res) {
   conversation.messages.push({ sender: req.user._id, content: req.body.content });
   await conversation.save();
   await conversation.populate("participants", "pseudo");
-  await conversation.populate("product", "name imageUrl");
+  await conversation.populate("product", "name imageUrl category");
 
   res.status(201).json({ conversation });
 });

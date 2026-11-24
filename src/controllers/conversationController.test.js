@@ -132,6 +132,9 @@ describe("GET /api/conversations and /api/conversations/:id", () => {
       .set("Authorization", `Bearer ${stranger.token}`);
 
     expect(buyerList.body.conversations).toHaveLength(1);
+    expect(buyerList.body.conversations[0].product.category).toBe(
+      product.category,
+    );
     expect(sellerList.body.conversations).toHaveLength(1);
     expect(strangerList.body.conversations).toHaveLength(0);
   });
