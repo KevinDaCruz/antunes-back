@@ -7,7 +7,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "nodemon src/server.js",
+    "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "lint": "eslint .",
     "test": "vitest run",
@@ -34,12 +34,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.1.1",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
     "mongodb-memory-server": "^10.1.2",
-    "nodemon": "^3.1.9",
     "supertest": "^7.0.0",
-    "vitest": "^5.0.1"
+    "vitest": "^5.1.1"
   }
 }
