@@ -58,9 +58,17 @@ export function createApp() {
     );
 
     // Limite stricte sur les routes d'authentification pour freiner le brute-force.
+    // Seuls les envois de formulaire (POST) sont comptés : GET /auth/me est
+    // appelé à chaque chargement de page, et le compter déconnectait un
+    // utilisateur qui ouvrait plus de 20 pages en un quart d'heure.
     app.use(
       "/api/auth",
-      rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true }),
+      rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 20,
+        standardHeaders: true,
+        skip: (req) => req.method === "GET",
+      }),
     );
 
     // Formulaire public sans authentification : 5 demandes / heure par IP
