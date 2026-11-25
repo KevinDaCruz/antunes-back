@@ -73,6 +73,10 @@ export const startConversation = asyncHandler(async function startConversation(
     throw new AppError("Produit introuvable.", 404);
   }
 
+  if (product.status === "withdrawn") {
+    throw new AppError("Cette annonce n'est plus disponible.", 409);
+  }
+
   if (product.seller.toString() === req.user._id.toString()) {
     throw new AppError(
       "Tu ne peux pas démarrer une conversation sur ta propre annonce.",

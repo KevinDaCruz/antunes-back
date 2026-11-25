@@ -4,9 +4,14 @@ import {
   getProductById,
   createProduct,
   listMyProducts,
+  updateProduct,
+  withdrawProduct,
 } from "../controllers/productController.js";
 import { validateBody } from "../middlewares/validate.js";
-import { createProductSchema } from "../validators/productValidators.js";
+import {
+  createProductSchema,
+  updateProductSchema,
+} from "../validators/productValidators.js";
 import { requireAuth, requireVerifiedEmail } from "../middlewares/auth.js";
 
 const router = Router();
@@ -22,5 +27,7 @@ router.post(
   validateBody(createProductSchema),
   createProduct,
 );
+router.patch("/:id", requireAuth, validateBody(updateProductSchema), updateProduct);
+router.delete("/:id", requireAuth, withdrawProduct);
 
 export default router;

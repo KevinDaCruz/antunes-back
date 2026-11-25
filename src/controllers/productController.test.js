@@ -106,6 +106,37 @@ describe("POST /api/products", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it.each([
+    [0, "Le prix doit être d'au moins 1 €."],
+    [25000, "Le prix ne doit pas dépasser 20000 €."],
+    [9.999, "Le prix ne peut pas avoir plus de deux décimales."],
+  ])("rejects a price of %s € with a clear message", async (price, message) => {
+    const token = await createAuthenticatedUser();
+
+    const response = await createProduct(token, { price });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe(message);
+  });
+
+  it("accepts a price with cents", async () => {
+    const token = await createAuthenticatedUser();
+
+    const response = await createProduct(token, { price: 19.99 });
+
+    expect(response.status).toBe(201);
+    expect(response.body.product.price).toBe(19.99);
+  });
+
+  it("rejects a category outside the closed list", async () => {
+    const token = await createAuthenticatedUser();
+
+    const response = await createProduct(token, { category: "Voitures" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe("Catégorie invalide.");
+  });
 });
 
 describe("GET /api/products", () => {
@@ -226,5 +257,159 @@ describe("GET /api/products/mine", () => {
     expect(response.status).toBe(200);
     expect(response.body.products).toHaveLength(1);
     expect(response.body.products[0].status).toBe("sold");
+  });
+});
+
+async function createOtherUser() {
+  const response = await request(app).post("/api/auth/signup").send({
+    firstName: "Nina",
+    lastName: "Martin",
+    pseudo: "ninam",
+    email: "nina@example.com",
+    password: "Azerty-2026!x",
+  });
+  await confirmEmail("nina@example.com");
+
+  return response.body.token;
+}
+
+describe("PATCH /api/products/:id", () => {
+  it("lets the seller update the price and description", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+
+    const response = await request(app)
+      .patch(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ price: 899.5, description: "Batterie neuve." });
+
+    expect(response.status).toBe(200);
+    expect(response.body.product.price).toBe(899.5);
+    expect(response.body.product.description).toBe("Batterie neuve.");
+    expect(response.body.product.name).toBe("iPhone 15 Pro");
+  });
+
+  it("refuses to let another member update the listing", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+    const otherToken = await createOtherUser();
+
+    const response = await request(app)
+      .patch(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${otherToken}`)
+      .send({ price: 1 });
+
+    expect(response.status).toBe(403);
+    const product = await Product.findById(created.body.product._id);
+    expect(product.price).toBe(950);
+  });
+
+  it("refuses to update a sold listing", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+    await Product.findByIdAndUpdate(created.body.product._id, { status: "sold" });
+
+    const response = await request(app)
+      .patch(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ price: 800 });
+
+    expect(response.status).toBe(409);
+  });
+
+  it("ignores a status or seller sent by the client", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+    const otherToken = await createOtherUser();
+    const other = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${otherToken}`);
+
+    await request(app)
+      .patch(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ price: 900, status: "sold", seller: other.body.user._id });
+
+    const product = await Product.findById(created.body.product._id);
+    expect(product.status).toBe("available");
+    expect(product.seller.toString()).toBe(created.body.product.seller._id);
+  });
+
+  it("rejects an empty update", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+
+    const response = await request(app)
+      .patch(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("DELETE /api/products/:id", () => {
+  it("withdraws the listing from the catalog and from favorites", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+    const productId = created.body.product._id;
+    const otherToken = await createOtherUser();
+    await request(app)
+      .post(`/api/favorites/${productId}`)
+      .set("Authorization", `Bearer ${otherToken}`);
+
+    const response = await request(app)
+      .delete(`/api/products/${productId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(204);
+    const catalog = await request(app).get("/api/products");
+    expect(catalog.body.products).toHaveLength(0);
+    const favorites = await request(app)
+      .get("/api/favorites")
+      .set("Authorization", `Bearer ${otherToken}`);
+    expect(favorites.body.products).toHaveLength(0);
+    const direct = await request(app).get(`/api/products/${productId}`);
+    expect(direct.body.product.status).toBe("withdrawn");
+  });
+
+  it("makes a withdrawn listing impossible to buy", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+    const otherToken = await createOtherUser();
+    await request(app)
+      .delete(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const response = await request(app)
+      .post("/api/payments/checkout-session")
+      .set("Authorization", `Bearer ${otherToken}`)
+      .send({ productId: created.body.product._id });
+
+    expect(response.status).toBe(409);
+  });
+
+  it("refuses to let another member withdraw the listing", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+    const otherToken = await createOtherUser();
+
+    const response = await request(app)
+      .delete(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${otherToken}`);
+
+    expect(response.status).toBe(403);
+  });
+
+  it("refuses to withdraw a sold listing", async () => {
+    const token = await createAuthenticatedUser();
+    const created = await createProduct(token);
+    await Product.findByIdAndUpdate(created.body.product._id, { status: "sold" });
+
+    const response = await request(app)
+      .delete(`/api/products/${created.body.product._id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(409);
   });
 });

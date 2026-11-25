@@ -29,6 +29,10 @@ export const addFavorite = asyncHandler(async function addFavorite(req, res) {
     throw new AppError("Produit introuvable.", 404);
   }
 
+  if (product.status === "withdrawn") {
+    throw new AppError("Cette annonce n'est plus disponible.", 409);
+  }
+
   await User.findByIdAndUpdate(req.user._id, {
     $addToSet: { favorites: productId },
   });

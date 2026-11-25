@@ -117,6 +117,25 @@ describe("POST /api/payments/checkout-session", () => {
     expect(callArgs.line_items[0].price_data.unit_amount).toBe(95000);
   });
 
+  it("makes an abandoned checkout session expire after 30 minutes", async () => {
+    const seller = await createUser();
+    const buyer = await createUser({
+      pseudo: "buyer",
+      email: "buyer@example.com",
+    });
+    const product = await createProduct(seller.token);
+    const before = Math.floor(Date.now() / 1000);
+
+    await request(app)
+      .post("/api/payments/checkout-session")
+      .set("Authorization", `Bearer ${buyer.token}`)
+      .send({ productId: product._id });
+
+    const callArgs = fakeStripe.checkout.sessions.create.mock.calls[0][0];
+    expect(callArgs.expires_at - before).toBeGreaterThanOrEqual(30 * 60);
+    expect(callArgs.expires_at - before).toBeLessThan(31 * 60);
+  });
+
   it("rejects buying your own product", async () => {
     const seller = await createUser();
     const product = await createProduct(seller.token);

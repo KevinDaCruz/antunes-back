@@ -8,6 +8,8 @@ import { buildFrontendUrl } from "../utils/frontendUrl.js";
 import { computeServiceFeeCents, toCents } from "../utils/pricing.js";
 import { logger } from "../utils/logger.js";
 
+const CHECKOUT_SESSION_LIFETIME_SECONDS = 30 * 60;
+
 export const createCheckoutSession = asyncHandler(
   async function createCheckoutSession(req, res) {
     const { productId } = req.body;
@@ -24,6 +26,10 @@ export const createCheckoutSession = asyncHandler(
 
     if (product.status === "sold") {
       throw new AppError("Cet article a déjà été vendu.", 409);
+    }
+
+    if (product.status === "withdrawn") {
+      throw new AppError("Cette annonce n'est plus disponible.", 409);
     }
 
     if (product.seller.toString() === req.user._id.toString()) {
@@ -62,6 +68,10 @@ export const createCheckoutSession = asyncHandler(
         "/payment-success?session_id={CHECKOUT_SESSION_ID}",
       ),
       cancel_url: buildFrontendUrl("/payment-cancelled"),
+      // Durée minimale acceptée par Stripe (30 min, contre 24 h par défaut) :
+      // un paiement abandonné passe vite en « échoué » via le webhook
+      // checkout.session.expired, au lieu de rester « en attente ».
+      expires_at: Math.floor(Date.now() / 1000) + CHECKOUT_SESSION_LIFETIME_SECONDS,
       metadata: {
         productId: product._id.toString(),
         buyerId: req.user._id.toString(),
